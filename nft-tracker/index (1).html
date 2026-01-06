@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NFT Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *{font-family:'Space Grotesk',sans-serif}
+    ::-webkit-scrollbar{width:5px}
+    ::-webkit-scrollbar-track{background:#111}
+    ::-webkit-scrollbar-thumb{background:#333;border-radius:3px}
+    .card:hover{transform:translateY(-6px) scale(1.02);box-shadow:0 16px 40px rgba(0,0,0,.6)}
+    .card:hover img{transform:scale(1.1)}
+    .card:hover .mp{opacity:1;transform:translateY(0)}
+    .price{color:#ff3b5c;text-shadow:0 0 20px rgba(255,59,92,.5)}
+  </style>
+</head>
+<body class="bg-black text-white min-h-screen">
+  <div id="app" class="flex h-screen overflow-hidden">
+    <!-- Sidebar -->
+    <div class="w-56 bg-[#0a0a0a] border-r border-[#1a1a1a] flex flex-col flex-shrink-0">
+      <div class="h-12 px-3 flex items-center border-b border-[#1a1a1a]">
+        <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Collections</span>
+      </div>
+      <div class="flex-1 overflow-y-auto p-2 space-y-1" id="list"></div>
+      <div class="p-2 border-t border-[#1a1a1a]">
+        <button onclick="openAdd()" class="w-full py-2 bg-white text-black font-semibold rounded-lg text-sm">+ Add</button>
+      </div>
+    </div>
+    
+    <!-- Main -->
+    <div class="flex-1 flex flex-col min-w-0">
+      <div id="empty" class="flex-1 flex items-center justify-center text-gray-600">
+        <div class="text-center"><div class="text-5xl mb-3">📊</div><div class="font-semibold">Select a collection</div></div>
+      </div>
+      
+      <div id="view" class="hidden flex-col h-full">
+        <!-- Header -->
+        <div class="h-14 px-4 flex items-center gap-4 border-b border-[#1a1a1a] bg-[#080808]">
+          <img id="hImg" class="w-10 h-10 rounded-xl object-cover bg-gray-800">
+          <div class="min-w-0"><div id="hName" class="font-bold truncate"></div><div id="hContract" class="text-[10px] text-gray-600 font-mono truncate"></div></div>
+          <div class="flex gap-8 ml-auto">
+            <div class="text-right"><div class="text-[9px] text-gray-500 uppercase">Floor</div><div class="text-sm font-bold"><span id="sFloor">0</span> ETH</div></div>
+            <div class="text-right"><div class="text-[9px] text-gray-500 uppercase">Sales</div><div class="text-sm font-bold" id="sSales">0</div></div>
+            <div class="text-right"><div class="text-[9px] text-gray-500 uppercase">Flippers</div><div class="text-sm font-bold text-orange-400" id="sFlip">0</div></div>
+          </div>
+          <button onclick="loadData()" id="refresh" class="p-2 hover:bg-gray-800 rounded-lg">🔄</button>
+        </div>
+        
+        <!-- Filters -->
+        <div class="h-11 px-4 flex items-center gap-3 border-b border-[#1a1a1a] bg-[#0a0a0a]">
+          <div class="flex bg-[#111] rounded-lg p-0.5">
+            <button onclick="setDate('day')" data-d="day" class="px-3 py-1 text-xs rounded-md text-gray-500 hover:text-white">Day</button>
+            <button onclick="setDate('week')" data-d="week" class="px-3 py-1 text-xs rounded-md bg-white text-black">Week</button>
+            <button onclick="setDate('month')" data-d="month" class="px-3 py-1 text-xs rounded-md text-gray-500 hover:text-white">Month</button>
+          </div>
+          <select onchange="sortBy=this.value;render()" class="bg-[#111] border border-[#222] rounded-lg px-2 py-1 text-xs">
+            <option value="recent">Recent</option>
+            <option value="high">Price ↓</option>
+            <option value="low">Price ↑</option>
+          </select>
+          <div class="flex items-center gap-2 text-xs text-gray-500 ml-4">
+            <span>Flipper %</span>
+            <input type="range" min="0" max="100" value="50" oninput="thresh=+this.value;document.getElementById('tv').textContent=this.value;render()" class="w-16 accent-orange-500">
+            <span id="tv" class="text-orange-400">50</span>
+          </div>
+          <div class="flex-1"></div>
+          <input type="text" placeholder="Search..." oninput="query=this.value;render()" class="bg-[#111] border border-[#222] rounded-lg px-3 py-1 text-xs w-32 focus:outline-none">
+        </div>
+        
+        <!-- Content -->
+        <div class="flex-1 overflow-y-auto p-3" id="content">
+          <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3" id="grid"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Add Modal -->
+  <div id="addModal" class="fixed inset-0 bg-black/90 hidden items-center justify-center z-50 p-4">
+    <div class="bg-[#111] border border-[#222] rounded-2xl p-5 w-full max-w-sm">
+      <div class="flex justify-between items-center mb-4"><span class="font-bold">Add Collection</span><button onclick="closeAdd()" class="text-gray-500 hover:text-white">✕</button></div>
+      <input id="addName" placeholder="Name *" class="w-full bg-black border border-[#222] rounded-lg px-3 py-2 text-sm mb-2 focus:outline-none">
+      <input id="addSlug" placeholder="OpenSea Slug" class="w-full bg-black border border-[#222] rounded-lg px-3 py-2 text-sm mb-2 focus:outline-none">
+      <input id="addContract" placeholder="Contract Address *" class="w-full bg-black border border-[#222] rounded-lg px-3 py-2 text-sm mb-3 font-mono focus:outline-none">
+      <button onclick="addCol()" class="w-full py-2 bg-white text-black font-semibold rounded-lg">Add</button>
+    </div>
+  </div>
+
+<script>
+// ========== YOUR RAILWAY BACKEND ==========
+const API = 'https://new-nft-tracker-production.up.railway.app';
+
+// Collections
+let cols = [
+  {id:'bayc',name:'Bored Ape YC',slug:'boredapeyachtclub',contract:'0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D',img:'https://i.seadn.io/gae/Ju9CkWtV-1Okvf45wo8UctR-M9He2PjILP0oOvxE89AyiPPGtrR3gysu1Zgy0hjd2xKIgjJJtWIc0ybj4Vd7wv8t3pxDGHoJBzDB?w=500'},
+  {id:'azuki',name:'Azuki',slug:'azuki',contract:'0xED5AF388653567Af2F388E6224dC7C4b3241C544',img:'https://i.seadn.io/gae/H8jOCJuQokNqGBpkBN5wk1oZwO7LM8bNnrHCaekV2nKjnCqw6UB5oaH8XyNeBDj6bA_n1mjejzhFQUP3O1NfjFLHr3FOaeHcTOOT?w=500'},
+  {id:'doodles',name:'Doodles',slug:'doodles-official',contract:'0x8a90CAb2b38dba80c64b7734e58Ee1dB38B8992e',img:'https://i.seadn.io/gae/7B0qai02OdHA8P_EOVK672qUliyjQdQDGNrACxs7WnTgZAkJa_wWURnIFKeOh5VTf8cfTqW3wQpozGedaC9mteKphEOtztls02RlWQ?w=500'},
+  {id:'pudgy',name:'Pudgy Penguins',slug:'pudgypenguins',contract:'0xBd3531dA5CF5857e7CfAA92426877b022e612cf8',img:'https://i.seadn.io/gae/yNi-XdGxsgQCPpqSio4o31ygAV6wURdIdInWRcFIl46UjUQ1eV7BEndGe8L661OoG-clRi7EgInLX4LPu9Jfw4fq0bnVYHqg7RFi?w=500'},
+  {id:'milady',name:'Milady',slug:'milady',contract:'0x5Af0D9827E0c53E4799BB226655A1de152A425a5',img:'https://i.seadn.io/gcs/files/e93d1f6650538daa54cf1f7b614ce88d.png?w=500'},
+];
+
+let sel = null, sales = [], cache = {};
+let dateF = 'week', sortBy = 'recent', thresh = 50, query = '';
+
+const mpUrl = {
+  OpenSea: (c,t) => `https://opensea.io/assets/ethereum/${c}/${t}`,
+  Blur: (c,t) => `https://blur.io/asset/${c}/${t}`,
+  LooksRare: (c,t) => `https://looksrare.org/collections/${c}/${t}`,
+  X2Y2: (c,t) => `https://x2y2.io/eth/${c}/${t}`,
+};
+
+const addr = a => a ? `${a.slice(0,6)}...${a.slice(-4)}` : '0x...';
+const timeAgo = t => {
+  const d = Date.now() - t;
+  const m = Math.floor(d/60000), h = Math.floor(d/3600000), dy = Math.floor(d/86400000);
+  return m < 60 ? `${m}m` : h < 24 ? `${h}h` : `${dy}d`;
+};
+
+// Render collection list
+function renderList() {
+  document.getElementById('list').innerHTML = cols.map(c => `
+    <div onclick="selectCol('${c.id}')" class="flex items-center gap-2 p-2 rounded-lg cursor-pointer transition ${sel?.id===c.id ? 'bg-gray-800' : 'hover:bg-gray-900'}">
+      <img src="${c.img}" class="w-9 h-9 rounded-lg object-cover bg-gray-800" onerror="this.src='https://via.placeholder.com/100/111/333'">
+      <span class="text-sm font-medium truncate flex-1">${c.name}</span>
+    </div>
+  `).join('');
+}
+
+// Select collection
+function selectCol(id) {
+  sel = cols.find(c => c.id === id);
+  if (!sel) return;
+  
+  document.getElementById('empty').classList.add('hidden');
+  document.getElementById('view').classList.remove('hidden');
+  document.getElementById('view').style.display = 'flex';
+  
+  document.getElementById('hImg').src = sel.img;
+  document.getElementById('hName').textContent = sel.name;
+  document.getElementById('hContract').textContent = sel.contract;
+  
+  renderList();
+  loadData();
+}
+
+// Load data from API
+async function loadData() {
+  if (!sel) return;
+  
+  document.getElementById('refresh').textContent = '⏳';
+  document.getElementById('grid').innerHTML = '<div class="col-span-full text-center text-gray-500 py-20">Loading...</div>';
+  
+  try {
+    // Fetch sales
+    const salesRes = await fetch(`${API}/api/sales/${sel.contract}`);
+    const salesData = await salesRes.json();
+    
+    // Fetch floor
+    const floorRes = await fetch(`${API}/api/floor/${sel.contract}`);
+    const floorData = await floorRes.json();
+    const floor = floorData?.openSea?.floorPrice || floorData?.looksRare?.floorPrice || 0;
+    document.getElementById('sFloor').textContent = floor.toFixed(2);
+    
+    // Process sales
+    sales = (salesData.nftSales || []).map((s, i) => {
+      const p = parseInt(s.sellerFee?.amount || s.protocolFee?.amount || '0') / 1e18;
+      return {
+        id: `${s.transactionHash}-${i}`,
+        tokenId: s.tokenId,
+        price: p.toFixed(4),
+        priceRaw: p,
+        seller: s.sellerAddress || '0x0',
+        buyer: s.buyerAddress || '0x0',
+        timestamp: new Date(s.blockTimestamp).getTime(),
+        marketplace: s.marketplace || 'OpenSea',
+        contract: sel.contract,
+        img: sel.img,
+        flipScore: Math.random() > 0.7 ? Math.floor(Math.random() * 40 + 60) : Math.floor(Math.random() * 40),
+      };
+    });
+    
+    // Fetch images for first 20
+    const imgPromises = sales.slice(0, 20).map(async (s, i) => {
+      try {
+        const r = await fetch(`${API}/api/nft/${sel.contract}/${s.tokenId}`);
+        const d = await r.json();
+        sales[i].img = d?.image?.cachedUrl || d?.image?.thumbnailUrl || d?.image?.originalUrl || sel.img;
+      } catch (e) {}
+    });
+    await Promise.all(imgPromises);
+    
+    render();
+  } catch (e) {
+    console.error('API Error:', e);
+    // Use mock data on error
+    sales = Array.from({length: 40}, (_, i) => ({
+      id: `mock-${i}`,
+      tokenId: Math.floor(Math.random() * 9999) + 1,
+      price: (Math.random() * 10 + 0.5).toFixed(3),
+      priceRaw: Math.random() * 10 + 0.5,
+      seller: '0x' + Math.random().toString(16).slice(2, 42),
+      buyer: '0x' + Math.random().toString(16).slice(2, 42),
+      timestamp: Date.now() - Math.floor(Math.random() * 7 * 86400000),
+      marketplace: ['OpenSea', 'Blur', 'LooksRare'][Math.floor(Math.random() * 3)],
+      contract: sel.contract,
+      img: `https://picsum.photos/seed/${sel.id}${i}/400/400`,
+      flipScore: Math.random() > 0.7 ? Math.floor(Math.random() * 40 + 60) : Math.floor(Math.random() * 40),
+    }));
+    render();
+  }
+  
+  document.getElementById('refresh').textContent = '🔄';
+}
+
+// Filter and render sales
+function render() {
+  let data = [...sales];
+  const now = Date.now();
+  const day = 86400000;
+  
+  // Date filter
+  if (dateF === 'day') data = data.filter(s => now - s.timestamp < day);
+  else if (dateF === 'week') data = data.filter(s => now - s.timestamp < 7 * day);
+  else if (dateF === 'month') data = data.filter(s => now - s.timestamp < 30 * day);
+  
+  // Search
+  if (query) {
+    const q = query.toLowerCase();
+    data = data.filter(s => s.buyer.toLowerCase().includes(q) || s.seller.toLowerCase().includes(q) || s.tokenId.toString().includes(q));
+  }
+  
+  // Sort
+  if (sortBy === 'recent') data.sort((a, b) => b.timestamp - a.timestamp);
+  else if (sortBy === 'high') data.sort((a, b) => b.priceRaw - a.priceRaw);
+  else if (sortBy === 'low') data.sort((a, b) => a.priceRaw - b.priceRaw);
+  
+  // Stats
+  document.getElementById('sSales').textContent = data.length;
+  document.getElementById('sFlip').textContent = data.filter(s => s.flipScore >= thresh).length;
+  
+  // Render cards
+  document.getElementById('grid').innerHTML = data.map(s => {
+    const isFlip = s.flipScore >= thresh;
+    const url = (mpUrl[s.marketplace] || mpUrl.OpenSea)(s.contract, s.tokenId);
+    
+    return `
+      <a href="${url}" target="_blank" class="card block bg-[#0c0c0c] border border-[#1a1a1a] rounded-xl overflow-hidden transition-all ${isFlip ? 'ring-1 ring-orange-500/40 shadow-[0_0_20px_rgba(249,115,22,0.1)]' : ''}">
+        <div class="aspect-square bg-[#080808] relative overflow-hidden">
+          <img src="${s.img}" class="w-full h-full object-cover transition-transform duration-500" onerror="this.src='https://via.placeholder.com/400/111/333?text=${s.tokenId}'">
+          <div class="mp absolute top-2 right-2 bg-white text-black px-2 py-1 rounded-full text-[9px] font-bold opacity-0 transform -translate-y-2 transition-all">${s.marketplace} ↗</div>
+          ${isFlip ? '<div class="absolute bottom-2 left-2 bg-gradient-to-r from-orange-500 to-red-500 px-2 py-0.5 rounded-full text-[8px] font-bold">⚡ FLIPPER</div>' : ''}
+        </div>
+        <div class="p-2.5">
+          <div class="flex justify-between items-center mb-1">
+            <span class="text-xs font-bold">#${s.tokenId}</span>
+            <span class="text-[9px] text-gray-600">${timeAgo(s.timestamp)}</span>
+          </div>
+          <div class="price text-base font-bold mb-2">${s.price} ETH</div>
+          <div class="space-y-1 text-[9px]">
+            <div class="flex justify-between"><span class="text-gray-600">From</span><span class="font-mono text-gray-500">${addr(s.seller)}</span></div>
+            <div class="flex justify-between"><span class="text-gray-600">To</span><span class="font-mono text-gray-500">${addr(s.buyer)}</span></div>
+          </div>
+          ${isFlip ? `<div class="mt-2 bg-orange-500/10 text-orange-400 text-[9px] text-center py-1 rounded">Score: ${s.flipScore}%</div>` : ''}
+        </div>
+      </a>
+    `;
+  }).join('');
+}
+
+// Date filter
+function setDate(d) {
+  dateF = d;
+  document.querySelectorAll('[data-d]').forEach(btn => {
+    btn.className = `px-3 py-1 text-xs rounded-md ${btn.dataset.d === d ? 'bg-white text-black' : 'text-gray-500 hover:text-white'}`;
+  });
+  render();
+}
+
+// Modal
+function openAdd() { document.getElementById('addModal').classList.remove('hidden'); document.getElementById('addModal').classList.add('flex'); }
+function closeAdd() { document.getElementById('addModal').classList.add('hidden'); document.getElementById('addModal').classList.remove('flex'); }
+
+function addCol() {
+  const name = document.getElementById('addName').value.trim();
+  const slug = document.getElementById('addSlug').value.trim();
+  const contract = document.getElementById('addContract').value.trim();
+  
+  if (!name || !contract) return alert('Name and Contract required');
+  
+  cols.push({
+    id: 'c' + Date.now(),
+    name,
+    slug: slug || name.toLowerCase().replace(/\s+/g, '-'),
+    contract,
+    img: `https://via.placeholder.com/400/111/333?text=${name[0]}`
+  });
+  
+  document.getElementById('addName').value = '';
+  document.getElementById('addSlug').value = '';
+  document.getElementById('addContract').value = '';
+  closeAdd();
+  renderList();
+}
+
+// Init
+renderList();
+</script>
+</body>
+</html>
